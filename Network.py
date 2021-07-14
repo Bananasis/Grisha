@@ -13,17 +13,18 @@ MODELDIR = "my_model"
 
 
 def preprocess(comments):
-    chrs = sorted(set(comments))
-    print(list(chrs))
+    chrs = sorted(set(comments))  # Obtain list of unique characters used in input data
     ids_from_chars = \
-        preprocessing.StringLookup(vocabulary=list(chrs), mask_token=None)
+        preprocessing.StringLookup(vocabulary=list(chrs),
+                                   mask_token=None)  # Function casts list of strings to list of integer values
     chars_from_ids = \
-        preprocessing.StringLookup(vocabulary=ids_from_chars.get_vocabulary(), invert=True, mask_token=None)
-    ids = ids_from_chars(list(comments))
+        preprocessing.StringLookup(vocabulary=ids_from_chars.get_vocabulary(), invert=True,
+                                   mask_token=None)  # The other way around
+    ids = ids_from_chars(list(comments))  # Cast input text to list of integers
     return tf.data.Dataset.from_tensor_slices(ids), ids_from_chars, chars_from_ids
 
 
-def split_input_target(sequence):
+def split_input_target(sequence):  # Split sequence into input and output for the model
     input_text = sequence[:-1]
     target_text = sequence[1:]
     return input_text, target_text
@@ -31,11 +32,11 @@ def split_input_target(sequence):
 
 def prepare_batches(comments, batch_size, seq_len):
     ds, ifc, cfi = preprocess(comments)
-    sequences = ds.batch(seq_len + 1, drop_remainder=True)
-    ds = sequences.map(split_input_target)
+    sequences = ds.batch(seq_len + 1, drop_remainder=True)  # Split input text into subsequences of some length
+    ds = sequences.map(split_input_target)  # Split input those subsequences into input and output
     ds = ds.shuffle(10000) \
         .batch(batch_size, drop_remainder=True) \
-        .prefetch(tf.data.experimental.AUTOTUNE)
+        .prefetch(tf.data.experimental.AUTOTUNE)  # Organize subsequences into batches and shuffles them.
     return ds, ifc, cfi
 
 
@@ -55,7 +56,7 @@ class Network(tf.keras.Model):
         if states is None:
             states = self.gru.get_initial_state(x)
         x, states = self.gru(x, initial_state=states, training=training)
-        if training:
+        if training:  # Dropout layer is for training only
             x = self.dropout(x)
         x = self.dense(x, training=training)
 
@@ -69,16 +70,17 @@ class Network(tf.keras.Model):
         loaded.assert_consumed()
 
     def compile_and_train(self, ds, epochs=20, checkpoints=True):
-        loss = tf.losses.SparseCategoricalCrossentropy(from_logits=True)
+        loss = tf.losses.SparseCategoricalCrossentropy(from_logits=True)  # Set loss function
+        # Crossentropy loss function is great for multiple classes classification
         self.compile(optimizer='adam', loss=loss)
         checkpoint_callback = []
-        if checkpoints:
+        if checkpoints:  # Add checkpoints at the end of an epoch
             checkpoint_dir = './training_checkpoints'
             checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt_{epoch}")
             checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
                 filepath=checkpoint_prefix,
                 save_weights_only=True)
-        self.fit(ds, epochs=epochs, callbacks=[checkpoint_callback])
+        self.fit(ds, epochs=epochs, callbacks=[checkpoint_callback])  # Start training
 
     class TextGenerator(tf.keras.Model):
         def __init__(self, model, chars_from_ids, ids_from_chars, temperature=1.0):
@@ -88,14 +90,11 @@ class Network(tf.keras.Model):
             self.chars_from_ids = chars_from_ids
             self.ids_from_chars = ids_from_chars
 
-            # Create a mask to prevent "[UNK]" from being generated.
-            skip_ids = self.ids_from_chars(['[UNK]'])[:, None]
+            skip_ids = self.ids_from_chars(['[UNK]'])[:, None]  # Create a mask to prevent "[UNK]" from being generated.
             sparse_mask = tf.SparseTensor(
-                # Put a -inf at each bad index.
-                values=[-float('inf')] * len(skip_ids),
+                values=[-float('inf')] * len(skip_ids),  # Put a -inf at each bad index.
                 indices=skip_ids,
-                # Match the shape to the vocabulary
-                dense_shape=[len(ids_from_chars.get_vocabulary())])
+                dense_shape=[len(ids_from_chars.get_vocabulary())]) # Match the shape to the vocabulary
             self.prediction_mask = tf.sparse.to_dense(sparse_mask)
 
         @tf.function

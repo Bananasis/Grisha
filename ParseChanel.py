@@ -15,9 +15,9 @@ class ParseChannel(db.Command):
             return None
         async for msg in channel.history(
                 limit=self.limit
-        ):  # As an example, I've set the limit to 10000
-            if msg.author != client.user:  # meaning it'll read 10000 messages instead of
-                if not msg.content.startswith("_"):  # the default amount of 100
+        ):
+            if msg.author != client.user:
+                if not msg.content.startswith("_"):
                     self.data = self.data.append(
                         {
                             "content": msg.content,
@@ -28,6 +28,6 @@ class ParseChannel(db.Command):
                 if len(self.data) == self.limit:
                     break
 
-        file_location = str(channel) + "_data.csv"  # Set the string to where you want the file to be saved to
+        file_location = str(channel) + "_data.csv"
 
         self.data.to_csv(file_location)
